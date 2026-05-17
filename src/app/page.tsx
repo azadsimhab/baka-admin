@@ -23,7 +23,8 @@ export default function AdminDashboard() {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8080/api/inventory/seed', {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const response = await fetch(`${backendUrl}/api/inventory/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Hardcoding +1 quantity per scan, mirroring standard supermarket checkout behavior
@@ -55,8 +56,8 @@ export default function AdminDashboard() {
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 font-sans p-6">
       <div className="max-w-2xl mx-auto">
-        
-        
+
+
         <header className="flex justify-between items-center mb-10 pb-4 border-b border-slate-700">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-white">Operations<span className="text-emerald-500">Hub</span></h1>
@@ -68,7 +69,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        
+
         <section className="bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 mb-8">
           <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">Hardware Scanner Input</h2>
           <form onSubmit={handleScan} className="relative">
@@ -82,8 +83,8 @@ export default function AdminDashboard() {
               className="w-full bg-slate-900 border-2 border-slate-600 rounded-xl py-6 px-6 text-2xl font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50"
               autoComplete="off"
             />
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="absolute right-4 top-4 bottom-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 rounded-lg transition-colors"
             >
               INDUCT
