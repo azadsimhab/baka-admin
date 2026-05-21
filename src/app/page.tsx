@@ -7,59 +7,81 @@ export default function AdminDashboard() {
   const [barcode, setBarcode] = useState('');
   const [logs, setLogs] = useState<ScanLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus the input so the hardware scanner is always ready
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (!cameraActive) {
+      inputRef.current?.focus();
+    }
+  }, [cameraActive]);
 
-  const handleScan = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!barcode.trim()) return;
+  useEffect(() => {
+    if (cameraActive) {
+      // Dynamic import to prevent Next.js Server-Side Rendering (SSR) crashes
+      import('html5-qrcode').then(({ Html5QrcodeScanner }) => {
+        const scanner = new Html5QrcodeScanner("reader", { qrbox: { width: 250, height: 150 }, fps: 10 }, false);
 
-    const currentBarcode = barcode.trim();
-    setBarcode(''); // Instantly clear input for the next physical scan
+        scanner.render(
+          (decodedText) => {
+            scanner.clear();
+            setCameraActive(false);
+            processInduction(decodedText);
+          },
+          (error) => { /* Ignore standard scan feed background errors */ }
+        );
+
+        return () => {
+          scanner.clear().catch(e => console.error("Scanner clear error", e));
+        };
+      });
+    }
+  }, [cameraActive]);
+
+  const processInduction = async (codeToScan: string) => {
+    if (!codeToScan.trim()) return;
     setLoading(true);
+    setBarcode(codeToScan);
 
     try {
       const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
       const response = await fetch(`${backendUrl}/api/inventory/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Hardcoding +1 quantity per scan, mirroring standard supermarket checkout behavior
-        body: JSON.stringify({ productId: currentBarcode, quantity: 1 }),
+        body: JSON.stringify({ productId: codeToScan.trim(), quantity: 1 }),
       });
 
       const newLog: ScanLog = {
         id: Math.random().toString(36).substring(7),
-        productId: currentBarcode,
+        productId: codeToScan.trim(),
         status: response.ok ? 'success' : 'error',
         timestamp: new Date().toLocaleTimeString()
       };
 
-      setLogs((prev) => [newLog, ...prev].slice(0, 5)); // Keep the last 5 scans visible
+      setLogs((prev) => [newLog, ...prev].slice(0, 5));
     } catch (error) {
-      // Create the typed object first so TypeScript knows exactly what it is
       const errorLog: ScanLog = {
         id: Math.random().toString(36).substring(7),
-        productId: currentBarcode,
+        productId: codeToScan.trim(),
         status: 'error',
         timestamp: new Date().toLocaleTimeString()
       };
-
       setLogs((prev) => [errorLog, ...prev].slice(0, 5));
     } finally {
       setLoading(false);
-      // Force focus back to input after network request
-      setTimeout(() => inputRef.current?.focus(), 10);
+      setBarcode('');
+      inputRef.current?.focus();
     }
+  };
+
+  const handleManualScan = (e: FormEvent) => {
+    e.preventDefault();
+    processInduction(barcode);
   };
 
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 font-sans p-6">
       <div className="max-w-2xl mx-auto">
-
 
         <header className="flex justify-between items-center mb-10 pb-4 border-b border-slate-700">
           <div>
@@ -72,31 +94,38 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-
         <section className="bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 mb-8">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">Hardware Scanner Input</h2>
-          <form onSubmit={handleScan} className="relative">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">Scanner Input</h2>
+
+          {cameraActive ? (
+            <div className="mb-6 border-2 border-emerald-500 rounded-xl overflow-hidden bg-black">
+              <div id="reader" className="w-full bg-white text-black"></div>
+              <button onClick={() => setCameraActive(false)} className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold text-sm tracking-widest uppercase">Cancel Camera</button>
+            </div>
+          ) : (
+            <button onClick={() => setCameraActive(true)} type="button" className="w-full mb-6 bg-slate-700 hover:bg-slate-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-3 transition-colors shadow-lg">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+              ACTIVATE MOBILE CAMERA
+            </button>
+          )}
+
+          <form onSubmit={handleManualScan} className="relative">
             <input
               ref={inputRef}
               type="text"
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
-              disabled={loading}
-              placeholder="Scan Barcode or Type Product ID..."
-              className="w-full bg-slate-900 border-2 border-slate-600 rounded-xl py-6 px-6 text-2xl font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50"
+              disabled={loading || cameraActive}
+              placeholder="Or type Product ID..."
+              className="w-full bg-slate-900 border-2 border-slate-600 rounded-xl py-5 px-5 text-xl font-mono text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-50"
               autoComplete="off"
             />
-            <button
-              type="submit"
-              className="absolute right-4 top-4 bottom-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-8 rounded-lg transition-colors"
-            >
+            <button type="submit" disabled={loading || cameraActive} className="absolute right-3 top-3 bottom-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 text-white font-bold px-6 rounded-lg transition-colors">
               INDUCT
             </button>
           </form>
-          <p className="text-xs text-slate-500 mt-4 text-center">Cursor auto-locks to this field. Ready for continuous wedge scanning.</p>
         </section>
 
-        {/* Live Induct Feed */}
         <section>
           <h2 className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-4">Recent Inductions</h2>
           <div className="space-y-3">
