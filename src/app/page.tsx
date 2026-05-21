@@ -40,12 +40,15 @@ export default function AdminDashboard() {
 
       setLogs((prev) => [newLog, ...prev].slice(0, 5)); // Keep the last 5 scans visible
     } catch (error) {
-      setLogs((prev) => [{
+      // Create the typed object first so TypeScript knows exactly what it is
+      const errorLog: ScanLog = {
         id: Math.random().toString(36).substring(7),
         productId: currentBarcode,
         status: 'error',
         timestamp: new Date().toLocaleTimeString()
-      }, ...prev].slice(0, 5));
+      };
+
+      setLogs((prev) => [errorLog, ...prev].slice(0, 5));
     } finally {
       setLoading(false);
       // Force focus back to input after network request
